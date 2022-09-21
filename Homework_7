@@ -1,0 +1,146 @@
+from pulp import *
+import pandas as pd
+
+
+############################################################################################################
+############################################################################################################
+
+# Solution Summary
+
+# Question 15.12.1:
+# The optimal solution is:  {'Amount_Celery,_Raw': 52.64371, 'Amount_Frozen_Broccoli': 0.25960653,
+#                            'Amount_Lettuce,Iceberg,Raw': 63.988506, 'Amount_Oranges': 2.2929389,
+#                            'Amount_Poached_Eggs': 0.14184397, 'Amount_Popcorn,Air_Popped': 13.869322}
+# Total Cost of Diet is $ 4.34
+
+# Question 15.12.2:
+# The optimal solution is:  {'Amount_Celery,_Raw': 42.399358, 'Amount_Kielbasa,Prk': 0.1,
+#                           'Amount_Lettuce,Iceberg,Raw': 82.802586, 'Amount_Oranges': 3.0771841,
+#                           'Amount_Peanut_Butter': 1.9429716, 'Amount_Poached_Eggs': 0.1,
+#                           'Amount_Popcorn,Air_Popped': 13.223294, 'Amount_Scrambled_Eggs': 0.1}
+# Total Cost of Diet is $ 4.51
+
+#############################################################################################################
+#############################################################################################################
+
+
+
+##############################
+# Question 15.2.1 Code
+##############################
+
+# Import Data
+data = pd.read_excel("diet.xls", header = 0)
+
+# Get only food data and convert each data point into an entry of a list
+food = data[0:64].values.tolist()
+
+# Initializing dictionaries and lists
+name = [x[0] for x in food]
+price = {}
+calories = {}
+cholesterol = {}
+fat = {}
+sodium = {}
+carbs = {}
+fiber = {}
+protein = {}
+vita = {}
+vitc = {}
+calcium = {}
+iron = {}
+
+for x in food:
+    price[x[0]] = float(x[1])
+    calories[x[0]] = float(x[3])
+    cholesterol[x[0]] = float(x[4])
+    fat[x[0]] = float(x[5])
+    sodium[x[0]] = float(x[6])
+    carbs[x[0]] = float(x[7])
+    fiber[x[0]] = float(x[8])
+    protein[x[0]] = float(x[9])
+    vita[x[0]] = float(x[10])
+    vitc[x[0]] = float(x[11])
+    calcium[x[0]] = float(x[12])
+    iron[x[0]] = float(x[13])
+
+nutrients = [calories, cholesterol, fat, sodium, carbs, fiber, protein, vita, vitc, calcium, iron]
+nutrients_name = ['calories', 'cholesterol', 'fat', 'sodium', 'carbs', 'fiber', 'protein', 'vita', 'vitc', 'calcium', 'iron']
+minVal = [1500,	30,	20,	800,130,125,60,	1000,400,700,10]
+maxVal = [2500,	240,70,	2000,450,250,100,10000,5000,1500,40]
+
+prob = LpProblem("First Diet Problem", LpMinimize)
+food_amount = LpVariable.dicts("Amount", name, lowBound = 0, cat="Continuous")
+
+# Define Cost constraint
+prob += lpSum([price[i]*food_amount[i] for i in name]), "Total Cost"
+
+# Define each nutrient's min/max amount constraint
+for n in range(len(nutrients_name)-1):
+    prob += lpSum([nutrients[n][i] * food_amount[i] for i in name]) >= minVal[n], str('min' + ' ' + nutrients_name[n])
+    prob += lpSum([nutrients[n][i] * food_amount[i] for i in name]) <= maxVal[n], str('max' + ' ' + nutrients_name[n])
+
+prob.solve()
+print("Status:", LpStatus[prob.status])
+
+# The status of the solution is optimal so now we have extract the amount of each food
+optimal_soln = {}
+
+for v in prob.variables():
+    # Only want to return foods that have positive amount
+    if v.varValue > 0:
+        optimal_soln[v.name] = v.varValue
+
+print("The optimal solution is: ", optimal_soln)
+print("Total Cost of Diet is $", round(value(prob.objective), 2))
+
+##############################
+# Question 15.2.2 Code
+##############################
+
+prob2 = LpProblem("Second Diet Problem", LpMinimize)
+food_amount = LpVariable.dicts("Amount", name, lowBound = 0)
+
+# Define Cost constraint for second scenario
+prob2 += lpSum([price[i]*food_amount[i] for i in name]), "Total Cost"
+
+# Define each nutrient's min/max amount constraint
+for n in range(len(nutrients_name)-1):
+    prob2 += lpSum([nutrients[n][i] * food_amount[i] for i in name]) >= minVal[n], str('min' + ' ' + nutrients_name[n])
+    prob2 += lpSum([nutrients[n][i] * food_amount[i] for i in name]) <= maxVal[n], str('max' + ' ' + nutrients_name[n])
+
+# a. If a food is selected, then a minimum of 1/10 serving must be chosen. (Hint: now you will need two variables for each food i: whether it is chosen, and how much is part of the diet.
+selected = LpVariable.dicts("Selected", name, 0, 1, LpBinary)
+for n in name:
+    # If food is selected, serving must be more than 1/10
+    prob2 += food_amount[n] >= 0.1 * selected[n]
+    # If food is selected, binary variable must be 1
+    prob2 += food_amount[n] <= selected[n]*1e5
+
+# b. Many people dislike celery and frozen broccoli. So at most one, but not both, can be selected.
+prob2 += selected['Frozen Broccoli'] + selected['Celery, Raw'] <= 1
+
+# c. To get day-to-day variety in protein, at least 3 kinds of meat/poultry/fish/eggs must be selected.
+
+for n in name:
+    prob2 += selected['Frankfurter, Beef'] + selected['Ham,Sliced,Extralean'] + selected['Kielbasa,Prk'] \
+             + selected['Hotdog, Plain'] + selected['Hamburger W/Toppings'] + selected['Pork'] + selected['Vegetbeef Soup'] \
+             + selected['Beanbacn Soup,W/Watr'] + selected['Roasted Chicken'] + selected['Bologna,Turkey'] \
+             + selected['Chicknoodl Soup'] + selected['Sardines in Oil'] + selected['White Tuna in Water'] + \
+             + selected['Poached Eggs'] + selected['Scrambled Eggs'] >= 3
+
+prob2.solve()
+print("Status:", LpStatus[prob2.status])
+
+# The status of the solution is optimal so now we have extract the amount of each food
+optimal_soln = {}
+
+for v in prob2.variables():
+    # Only want to return foods that have positive amount and not the binary variables
+    if v.varValue > 0 and "Selected" not in v.name:
+        optimal_soln[v.name] = v.varValue
+
+print("The optimal solution is: ", optimal_soln)
+print("Total Cost of Diet is $", round(value(prob2.objective), 2))
+
+
